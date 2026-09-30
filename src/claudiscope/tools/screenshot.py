@@ -1,8 +1,8 @@
-"""Screenshot tool: fetches the scope display, saves it, and returns it to Claude.
+"""Screenshot tool: fetches the scope display, saves it, and optionally returns it to Claude.
 
-Claude can see the returned image, but chat clients usually only render it inside
-the tool call. So every capture is also saved to disk and can optionally be opened
-in your default image viewer.
+Every capture is saved to disk and can be opened in your default image viewer.
+By default only the file path and a short note go back to Claude (saves tokens);
+pass return_image=True to also send the image itself.
 
 The HCOPy commands below work on the RTB2004. On another scope, check its programming
 manual and edit these constants.
@@ -79,12 +79,12 @@ def _open_in_viewer(path):
 
 def register(mcp, conn):
     @mcp.tool()
-    def get_screenshot(name: str = "", open_viewer: bool = True):
-        """Capture the scope's display. Returns the image for you to look at, and saves it
-        to disk. Chat clients rarely show tool images inline, so by default it also opens the
-        image in the user's default viewer; pass open_viewer=False to skip that. Optional
-        'name' is added to the filename (e.g. 'ch1_rising_edge'). Tell the user where the
-        file was saved."""
+    def get_screenshot(name: str = "", open_viewer: bool = True, return_image: bool = False):
+        """Capture the scope's display and save it to disk. By default the image is also
+        opened in the user's default viewer (open_viewer=False to skip), and only the file
+        path is returned to you, not the image, to save tokens. Pass return_image=True only
+        if you genuinely need to look at the image yourself. Optional 'name' is added to the
+        filename (e.g. 'ch1_rising_edge'). Tell the user where the file was saved."""
         if not conn.connected:
             return "Not connected. Call connect() first."
         if os.environ.get("CLAUDISCOPE_NO_VIEWER"):
@@ -109,7 +109,6 @@ def register(mcp, conn):
         if fmt is None:
             return f"Got {len(data)} bytes but they don't look like an image. Check the format command."
 
-        note = ""
         try:
             path = _save(data, fmt, name)
             note = f"Saved to {path}\nFile link: {path.as_uri()}"
@@ -117,4 +116,7 @@ def register(mcp, conn):
                 note += " (opened in viewer)" if _open_in_viewer(path) else " (could not open a viewer, open the file manually)"
         except Exception as e:
             note = f"Could not save the screenshot to disk: {e}"
-        return [Image(data=data, format=fmt if fmt != "jpg" else "jpeg"), note]
+
+        if return_image:
+            return [Image(data=data, format=fmt if fmt != "jpg" else "jpeg"), note]
+        return f"{note}\n({fmt}, {len(data)} bytes; image not returned to Claude to save tokens)"
