@@ -40,14 +40,22 @@ def _save(data, fmt, name):
     return path
 
 
+# Detach the viewer completely: the MCP server speaks over stdout, so a child process
+# must never inherit it (stray output would corrupt the protocol).
+_DETACHED = dict(stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
+                 stderr=subprocess.DEVNULL, start_new_session=True)
+
+
 def _open_in_viewer(path):
     try:
         if sys.platform.startswith("win"):
             os.startfile(str(path))  # noqa: S606
         elif sys.platform == "darwin":
-            subprocess.Popen(["open", str(path)])
+            subprocess.Popen(["open", str(path)], **_DETACHED)
         else:
-            subprocess.Popen(["xdg-open", str(path)])
+            if not (os.environ.get("DISPLAY") or os.environ.get("WAYLAND_DISPLAY")):
+                return False  # headless / ssh session: nothing to open a window on
+            subprocess.Popen(["xdg-open", str(path)], **_DETACHED)
         return True
     except Exception:
         return False
@@ -55,13 +63,16 @@ def _open_in_viewer(path):
 
 def register(mcp, conn):
     @mcp.tool()
-    def get_screenshot(name: str = "", open_viewer: bool = False):
+    def get_screenshot(name: str = "", open_viewer: bool = True):
         """Capture the scope's display. Returns the image for you to look at, and saves it
-        to disk. Optional 'name' is added to the filename (e.g. 'ch1_rising_edge').
-        Set open_viewer=True when the user wants to see the screenshot themselves: it opens
-        in their default image viewer. Tell the user where the file was saved."""
+        to disk. Chat clients rarely show tool images inline, so by default it also opens the
+        image in the user's default viewer; pass open_viewer=False to skip that. Optional
+        'name' is added to the filename (e.g. 'ch1_rising_edge'). Tell the user where the
+        file was saved."""
         if not conn.connected:
             return "Not connected. Call connect() first."
+        if os.environ.get("CLAUDISCOPE_NO_VIEWER"):
+            open_viewer = False
         old_timeout = conn.inst.timeout
         conn.inst.timeout = 30000
         try:
@@ -87,7 +98,7 @@ def register(mcp, conn):
             path = _save(data, fmt, name)
             note = f"Saved to {path}"
             if open_viewer:
-                note += " (opened in viewer)" if _open_in_viewer(path) else " (could not open a viewer)"
+                note += " (opened in viewer)" if _open_in_viewer(path) else " (no viewer or display available, open the file manually)"
         except Exception as e:
             note = f"Could not save the screenshot to disk: {e}"
         return [Image(data=data, format=fmt if fmt != "jpg" else "jpeg"), note]
