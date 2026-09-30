@@ -48,12 +48,15 @@ def _scan():
 
 def main(argv=None):
     p = argparse.ArgumentParser(prog="claudiscope", description="Let Claude drive a SCPI oscilloscope.")
+    p.add_argument("--version", action="version", version=f"claudiscope {__version__}")
     sub = p.add_subparsers(dest="cmd", required=True)
     sub.add_parser("serve", help="run the MCP server (tool mode)")
     sh = sub.add_parser("shell", help="interactive SCPI prompt (text mode)")
     sh.add_argument("-r", "--resource", help="e.g. TCPIP0::192.168.137.1::INSTR")
     sub.add_parser("scan", help="find and identify the scope")
     sub.add_parser("doctor", help="check the install")
+    up = sub.add_parser("update", help="update claudiscope to the latest version")
+    up.add_argument("--check", action="store_true", help="only check whether an update is available")
     args = p.parse_args(argv)
 
     if args.cmd == "serve":
@@ -65,6 +68,9 @@ def main(argv=None):
         return run(args.resource)
     if args.cmd == "scan":
         return _scan()
+    if args.cmd == "update":
+        from claudiscope.update import run
+        return run(check_only=args.check)
     return _doctor()
 
 
