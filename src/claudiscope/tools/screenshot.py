@@ -47,16 +47,32 @@ _DETACHED = dict(stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
 
 
 def _open_in_viewer(path):
+    """Open the file in the default viewer. Returns True if it looks like it worked.
+
+    Claude Desktop often starts the server without the desktop session's environment
+    (no DISPLAY, no DBUS address), so on Linux we fill in sensible defaults instead of
+    giving up. xdg-open exits quickly with a non-zero code if it can't open anything;
+    if it's still running after a few seconds, the viewer has taken over.
+    """
     try:
         if sys.platform.startswith("win"):
             os.startfile(str(path))  # noqa: S606
-        elif sys.platform == "darwin":
-            subprocess.Popen(["open", str(path)], **_DETACHED)
+            return True
+        env = os.environ.copy()
+        if sys.platform == "darwin":
+            cmd = ["open", str(path)]
         else:
-            if not (os.environ.get("DISPLAY") or os.environ.get("WAYLAND_DISPLAY")):
-                return False  # headless / ssh session: nothing to open a window on
-            subprocess.Popen(["xdg-open", str(path)], **_DETACHED)
-        return True
+            uid = os.getuid()
+            env.setdefault("XDG_RUNTIME_DIR", f"/run/user/{uid}")
+            env.setdefault("DBUS_SESSION_BUS_ADDRESS", f"unix:path=/run/user/{uid}/bus")
+            if not (env.get("DISPLAY") or env.get("WAYLAND_DISPLAY")):
+                env["DISPLAY"] = ":0"
+            cmd = ["xdg-open", str(path)]
+        proc = subprocess.Popen(cmd, env=env, **_DETACHED)
+        try:
+            return proc.wait(timeout=3) == 0
+        except subprocess.TimeoutExpired:
+            return True
     except Exception:
         return False
 
@@ -96,9 +112,9 @@ def register(mcp, conn):
         note = ""
         try:
             path = _save(data, fmt, name)
-            note = f"Saved to {path}"
+            note = f"Saved to {path}\nFile link: {path.as_uri()}"
             if open_viewer:
-                note += " (opened in viewer)" if _open_in_viewer(path) else " (no viewer or display available, open the file manually)"
+                note += " (opened in viewer)" if _open_in_viewer(path) else " (could not open a viewer, open the file manually)"
         except Exception as e:
             note = f"Could not save the screenshot to disk: {e}"
         return [Image(data=data, format=fmt if fmt != "jpg" else "jpeg"), note]
