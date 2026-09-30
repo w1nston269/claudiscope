@@ -4,8 +4,8 @@ Claude can see the returned image, but chat clients usually only render it insid
 the tool call. So every capture is also saved to disk and can optionally be opened
 in your default image viewer.
 
-NOTE: the scope commands below are UNVERIFIED for the RTB2004. Check the RTB2000
-programming manual (HCOPy subsystem) and edit these constants if needed.
+The HCOPy commands below work on the RTB2004. On another scope, check its programming
+manual and edit these constants.
 """
 
 import os

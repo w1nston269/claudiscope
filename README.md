@@ -79,6 +79,20 @@ python -m pip install "mcp<2"
 
 ---
 
+## Updating
+
+```
+claudiscope update            # or: python -m claudiscope update
+claudiscope update --check    # just see what's new
+```
+
+- **Installed from a git checkout** (`pip install -e .`): it does a `git pull --ff-only` and refreshes the install. If you've got local edits that clash with GitHub, it stops and tells you instead of doing anything rude.
+- **Installed with pipx or pip from GitHub:** it reinstalls from the repo. (`pipx upgrade claudiscope` also works.)
+
+**Restart Claude afterwards.** Fully quit and reopen Claude Desktop, or start a new Claude Code session. A running server keeps the old code until you do, which is a fun way to spend ten minutes debugging a bug you already fixed.
+
+---
+
 ## Connecting the scope
 
 ### Option A: Ethernet (the tested one)
@@ -125,9 +139,10 @@ A USB resource string looks like `USB0::0x0AAD::0x01D6::<serial>::INSTR`. Trust 
 | `claudiscope doctor` | Checks Python, the `mcp` and `pyvisa` versions, your VISA backend, visible instruments, and the saved address. Run this first when something's broken. |
 | `claudiscope scan` | Tries the saved address, then anything VISA can see, and prints the first scope that answers `*IDN?`. |
 | `claudiscope shell` | Interactive SCPI prompt. Add `-r <resource>` to pick an address, otherwise it auto-detects. Lines ending in `?` are queries, and everything else is a write followed by an error-queue check. `quit` exits. |
+| `claudiscope update` | Updates to the latest version from GitHub. Add `--check` to just list what's new without installing. Restart Claude afterwards. |
 | `claudiscope serve` | Starts the MCP server. You don't normally run this yourself, since Claude launches it. Run it by hand only to check it starts (it sits there quietly, and that's correct). |
 
-Everything above also works as `python -m claudiscope <command>`.
+Everything above also works as `python -m claudiscope <command>`, and `claudiscope --version` tells you what you're running.
 
 ---
 
@@ -182,7 +197,7 @@ claude mcp add claudiscope -- /path/to/claudiscope/.venv/bin/python -m claudisco
 | `scan` | Lists candidate addresses. |
 | `scpi_query` | Sends a SCPI query (must end in `?`). |
 | `scpi_write` | Sends a SCPI command, then reports the scope's error queue so Claude can correct itself. |
-| `get_screenshot` | Grabs the display as an image. **Best-effort:** the `HCOPy` commands are unverified for the RTB2004. If it fails, edit the two constants at the top of `src/claudiscope/tools/screenshot.py` using your scope's programming manual. |
+| `get_screenshot` | Grabs the display as an image. Claude sees it, and every capture is also saved to `~/claudiscope-screenshots/` with a timestamp (optional `name` goes in the filename). Chat windows usually don't show tool images inline, so with `open_viewer=True` it also pops the file up in your default image viewer. Ask for *"take a screenshot and open it"*. |
 
 Try: *"Connect to the scope, measure Vpp and frequency on channel 1, then take a screenshot."*
 
@@ -224,6 +239,7 @@ src/claudiscope/
 ├── discovery.py    # saved address + VISA scan (config lives in ~/.claudiscope.json)
 ├── server.py       # builds the MCP server
 ├── shell.py        # the text-mode prompt
+├── update.py       # `claudiscope update`
 └── tools/          # one file per group of MCP tools
 ```
 
@@ -233,8 +249,8 @@ Each file in `tools/` exposes a `register(mcp, conn)` function, so adding a tool
 
 ## Status and honesty corner
 
-- **Tested:** RTB2004 over Ethernet with R&S VISA on Windows.
-- **Untested:** USB, other scopes, most of the Linux path, and the screenshot commands.
+- **Tested:** RTB2004 over Ethernet with R&S VISA on Windows, including screenshots.
+- **Untested:** USB, other scopes, and most of the Linux path.
 - **Not yet:** waveform capture (raw data would swamp Claude's context, so it needs a summarizing tool first).
 
 PRs and bug reports welcome, especially "it works on my Rigol" and "it exploded on my Tektronix."
